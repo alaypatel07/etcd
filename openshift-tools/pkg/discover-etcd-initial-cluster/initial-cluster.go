@@ -3,7 +3,9 @@ package discover_etcd_initial_cluster
 import (
 	"context"
 	"fmt"
+	"io/ioutil"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"time"
@@ -176,7 +178,7 @@ func (o *DiscoverEtcdInitialClusterOptions) Run() error {
 
 	case targetMember != nil && len(targetMember.Name) == 0 && memberDirExists:
 		// our member has been added to the cluster and has never been started before, but a data directory exists. This means that we have dirty data we must remove
-		archiveDataDir(memberDir)
+		deleteDataDirContents(memberDir)
 
 	default:
 		// a target member was found, but no exception circumstances.
@@ -199,15 +201,16 @@ func (o *DiscoverEtcdInitialClusterOptions) Run() error {
 }
 
 // TO DO: instead of archiving, we should remove the directory to avoid any confusion with the backups.
-func archiveDataDir(sourceDir string) error {
-	targetDir := filepath.Join(sourceDir+"-removed-archive", time.Now().Format(time.RFC3339))
-
-	// If dir already exists, add seconds to the dir name
-	if _, err := os.Stat(targetDir); err == nil {
-		targetDir = filepath.Join(sourceDir+"-removed-archive", time.Now().Add(time.Second).Format(time.RFC3339))
-	}
-	if err := os.Rename(sourceDir, targetDir); err != nil && !os.IsNotExist(err) {
+func deleteDataDirContents(sourceDir string) error {
+	dir, err := ioutil.ReadDir(sourceDir)
+	if err != nil {
 		return err
+	}
+	for _, d := range dir {
+		err := os.RemoveAll(path.Join([]string{sourceDir, d.Name()}...))
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
